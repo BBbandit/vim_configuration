@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+
+# format modified files in svn repo
+import sys
+import os
+import subprocess
+import xml.etree.ElementTree as ET
+
+
+def check_if_svn(path):
+    """
+    检查是否是svn目录
+    """
+    ret = subprocess.run(['svn', 'status', path],
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    if ret.returncode != 0:
+        return False
+    stderr_str = ret.stderr.decode('utf-8')
+    if 'W155007' in stderr_str:
+        return False
+    return True
+
+
+def get_svn_modified_files(path):
+    ret = subprocess.run(['svn', 'status', path, '--xml'],
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    if ret.returncode != 0:
+        print(ret.stdout.decode('utf-8'))
+        sys.exit(ret.returncode)
+    xml_str = ret.stdout.decode('utf-8')
+    xml = ET.fromstring(xml_str)
+    entries = xml.findall('target/entry')
+    files = []
+    for ent in entries:
+        path = ent.get('path')
+        wc_status = ent.find('wc-status').get('item')
+        if wc_status == 'added' or wc_status == 'modified':
+            files.append(path)
+    return files
+
+
+def check_if_git(path):
+    """
+    检查是否git目录
+    """
+    ret = subprocess.run(['git', 'status', path],
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    if ret.returncode != 0:
+        return False
+    return True
+
+def get_git_modified_files_from_cmd(cmd_args):
+    ret = subprocess.run(cmd_args,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    if ret.returncode != 0:
+        print(ret.stdout.decode('utf-8'))
+        sys.exit(ret.returncode)
+
+    outstr = ret.stdout.decode('utf-8')
+    files = []
+    lines = outstr.split('\n')
+    for line in lines:
+        line = line.strip()
+        if len(line) == 0:
+            continue
+        files.append(line.strip())
+
+    return files
+
+def get_git_modified_files(path):
+    cached_files = set(get_git_modified_files_from_cmd(['git', 'diff', '--cached', '--name-only', '--diff-filter=AM', '--', path]))
+    noncached_files = set(get_git_modified_files_from_cmd(['git', 'diff', '--name-only', '--diff-filter=AM', '--', path]))
+
+    files = sorted(list(cached_files.union(noncached_files)))
+
+    return files
+
+def get_git_root_path(path):
+    ret = subprocess.run(['git', 'rev-parse', '--show-toplevel'],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
+    return ret.stdout.decode('utf-8').strip()
+
+def filter_out_files(files):
+    """
+    valid_names = ['Makefile', 'makefile']
+    """
+    valid_names = []
+    valid_exts = ['.c', '.h', '.cc', '.C', '.H', '.cpp']
+    out = []
+    for f in files:
+        basename = os.path.basename(f)
+        name, ext = os.path.splitext(basename)
+        if name in valid_names or ext in valid_exts:
+            out.append(f)
+    return out
+
+if __name__ == "__main__":
+    check_path = '.'
+    if check_if_svn(check_path):
+        files = filter_out_files(get_svn_modified_files(check_path))
+    elif check_if_git(check_path):
+        files = filter_out_files(get_git_modified_files(check_path))
+        os.chdir(get_git_root_path(check_path))
+    else:
+        print('not a git repo or a svn repo, exit')
+        sys.exit(1)
+
+    if files == []:
+        print("no files changed")
+        sys.exit(1)
+
+    args = ['astyle', '--style=linux', '-n', '-k3', '-H', '-U', '-p', '-j' ]
+    args.extend(files)
+    subprocess.run(args)
+
+

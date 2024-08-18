@@ -1,0 +1,16 @@
+使用步骤：
+1、更新软件目录，安装git
+sudo apt-get update
+sudo apt-get install git
+ 
+2、在 ~/ 用户目录里面，拷贝现成的linux环境
+cd ~/
+git clone https://gitlab.zh-jieli.com/chenhuanhui/linux_tools.git
+
+3、执行setup.sh，安装必要的软件和创建zsh/vim软链接
+source setup.sh
+
+4、修改xshell.sh中的软件路径和sudo账号密码
+
+5、重启终端
+

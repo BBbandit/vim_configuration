@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# find . -name "*.c" | xargs astyle --style=linux
+find . -iregex ".*\(\.\([ch]\|cpp\)\)$" -exec astyle --style=linux -n -k3 -H -U -p -j {} \;
+
+find . -name "*.format_orig" | xargs rm -rf {} \;
+
+
